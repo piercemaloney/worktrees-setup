@@ -34,7 +34,25 @@ git worktree add ../_wt/desk-2 -b main-desk-2 origin/main
 git -C ../_wt/desk-2 branch --set-upstream-to=origin/main main-desk-2
 ```
 
+Additionally, to have these functions available in your shell:
+
+```bash
+mkdir -p ~/.zshrc.d
+touch ~/.zshrc.d/worktrees.zsh
+```
+
+And then add the following to your `~/.zshrc`:
+
+```bash
+# functions
+for f in ~/.zshrc.d/*.zsh(N); do
+  source "$f"
+done
+```
+
 ## Helpers (in `~/.zshrc.d/worktrees.zsh`)
+
+Paste the following functions in your `~/.zshrc.d/worktrees.zsh`.
 
 ### `gotomain` — jump to the right "main" for the current dir
 
