@@ -39,12 +39,12 @@ gotomain() {
 }
 
 
-# New branch helper:
 # nb <new-branch-name>
+# - requires that you already have staged changes
 # - creates a new branch from current HEAD
 # - gs b track  (tracks the new branch)
-# - gs us o main (stacks onto main) ONLY if invoked nb while on main/main-desk-1/main-desk-2
-# - gs cc       (commits the changes)
+# - gs cc       (commits the currently staged changes)
+# - gs us o main (stacks onto main) ONLY if invoked from main/main-desk-1/main-desk-2
 nb() {
   # require a branch name
   if [[ -z "$1" ]]; then
@@ -63,6 +63,13 @@ nb() {
   local start_branch
   start_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
 
+  # fail early if there are no staged changes
+  if git diff --cached --quiet; then
+    echo "nb: no staged changes to commit."
+    echo "    Stage what you want on '$start_branch' (git add ...) and then run: nb $newb"
+    return 1
+  fi
+
   # guard: don't clobber existing branch name
   if git rev-parse --verify --quiet "$newb" >/dev/null; then
     echo "nb: branch '$newb' already exists"
@@ -78,6 +85,12 @@ nb() {
     return 1
   fi
 
+  # commit the currently staged changes BEFORE messing with the stack
+  if ! gs cc; then
+    echo "nb: 'gs cc' failed"
+    return 1
+  fi
+
   # only stack onto main if we *invoked* nb from one of these mains
   case "$start_branch" in
     main|main-desk-1|main-desk-2)
@@ -89,12 +102,5 @@ nb() {
     *) : ;; # do nothing
   esac
 
-  # commit the changes (whatever your gs cc does—typically WIP/staged)
-  if ! gs cc; then
-    echo "nb: 'gs cc' failed"
-    return 1
-  fi
-
   echo "✅ Created '$newb' from '$start_branch'$( [[ "$start_branch" =~ ^(main|main-desk-1|main-desk-2)$ ]] && echo ', stacked onto main' )."
 }
-
