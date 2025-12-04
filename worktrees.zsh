@@ -1,4 +1,3 @@
-
 # gotomain: switch to the "main" branch for this worktree
 # - if repo root dir is desk-<x>  -> switch to main-desk-<x>
 # - otherwise                     -> switch to main
@@ -103,4 +102,39 @@ nb() {
   esac
 
   echo "✅ Created '$newb' from '$start_branch'$( [[ "$start_branch" =~ ^(main|main-desk-1|main-desk-2)$ ]] && echo ', stacked onto main' )."
+}
+
+
+# sb <optional branch name>
+# - grabs latest commit subject on branch
+# - calls `gs bs` with args setting PR title to commit name
+sb() {
+  # ensure we're in a git repo
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "sb: not inside a git repository" >&2
+    return 1
+  fi
+
+  # current branch
+  local branch
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+
+  # last commit subject for this branch
+  local title
+  title="$(git log -1 --pretty=%s 2>/dev/null)" || title="WIP"
+
+  if [[ -z "$title" ]]; then
+    echo "sb: no commits on '$branch', nothing to submit" >&2
+    return 1
+  fi
+
+  echo "sb: submitting '$branch' with title: \"$title\" and (effectively) empty description"
+
+  # NOTE: use a single space for body, not an empty string,
+  # so git-spice treats it as "provided" and doesn't try to auto-fill.
+  gs --no-prompt branch submit \
+    --branch "$branch" \
+    --title "$title" \
+    --body " " \
+    "$@"
 }
