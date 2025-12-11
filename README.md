@@ -1,4 +1,4 @@
-# Git worktree setup (two "desks")
+# Git worktree setup (main clone + two desks)
 
 ## Overview
 
@@ -18,18 +18,18 @@ On top of that, I use **Git Spice** for branch stacking and PR management, plus 
 ~/Desktop/_wt/
   desk-1/                  # worktree 1
   desk-2/                  # worktree 2
-````
+```
 
 ---
 
 ## Branch model
 
-* Each desk stays on a long-lived local branch that **tracks `origin/main`**:
+- Each desk stays on a long-lived local branch that **tracks `origin/main`**:
 
-  * `desk-1` → `main-desk-1`
-  * `desk-2` → `main-desk-2`
+  - `desk-1` → `main-desk-1`
+  - `desk-2` → `main-desk-2`
 
-* I do day-to-day work on these desk branches and spin off stacked feature branches with Git Spice when ready.
+- I do day-to-day work on these desk branches and spin off stacked feature branches with Git Spice when ready.
 
 ---
 
@@ -114,7 +114,7 @@ gotomain() {
 
 ### `nb` — create a new branch with a single commit, tracked by Git Spice
 
-`nb` assumes you’ve staged whatever you want to go into the *first commit* on the new branch.
+`nb` assumes you’ve staged whatever you want to go into the _first commit_ on the new branch.
 
 ```bash
 nb() {
@@ -183,8 +183,8 @@ nb() {
 
 `sb` wraps `gs branch submit` so you always get:
 
-* **Title** = the latest commit subject on the current branch.
-* **Body** = effectively empty (just a single space, to stop Git Spice from auto-filling the huge commit timeline).
+- **Title** = the latest commit subject on the current branch.
+- **Body** = effectively empty (just a single space, to stop Git Spice from auto-filling the huge commit timeline).
 
 ```bash
 sb() {
@@ -229,25 +229,100 @@ sb --draft
 sb --update-only
 ```
 
+### `dabgone` — safely delete local branches with gone upstreams
+
+`dabgone` scans for local branches whose upstream is marked as `: gone]` (remote deleted) and cleans them up, skipping protected branches (`main`, `main-desk-1`, `main-desk-2`). It prompts interactively before deleting any branches.
+
+Paste the following function in `~/.zshrc.d/worktrees.zsh`:
+
+```bash
+dabgone() {
+  # Branches you *never* want auto-deleted
+  local protected=("main" "main-desk-1" "main-desk-2")
+
+  # Make sure we're in a git repo
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+    echo "Not inside a git repository."
+    return 1
+  }
+
+  echo "Fetching and pruning remotes..."
+  git fetch --prune || {
+    echo "git fetch failed; aborting."
+    return 1
+  }
+
+  # Find local branches whose upstream is marked ': gone]'
+  local gone_branches
+  gone_branches=($(git branch -vv | awk '/: gone]/{print $1}'))
+
+  if (( ${#gone_branches[@]} == 0 )); then
+    echo "No local branches with gone upstreams found. Nothing to do ✅"
+    return 0
+  fi
+
+  # Filter out protected branches
+  local deletable=()
+  local b p skip
+  for b in "${gone_branches[@]}"; do
+    skip=0
+    for p in "${protected[@]}"; do
+      if [[ "$b" == "$p" ]]; then
+        skip=1
+        break
+      fi
+    done
+    (( skip )) || deletable+=("$b")
+  done
+
+  if (( ${#deletable[@]} == 0 )); then
+    echo "Only protected branches have gone upstreams. Nothing to delete ✅"
+    return 0
+  fi
+
+  echo "The following branches have upstreams marked as ': gone]' and will be deleted:"
+  for b in "${deletable[@]}"; do
+    echo "  $b"
+  done
+  echo
+
+  # Interactive confirmation (y/N)
+  read -q "REPLY?Delete these branches? [y/N] " || {
+    echo
+    echo "Aborted. No branches were deleted."
+    return 1
+  }
+  echo
+
+  # Delete them
+  for b in "${deletable[@]}"; do
+    echo "Deleting $b"
+    git branch -D "$b"
+  done
+
+  echo "Done ✅"
+}
+```
+
 ---
 
 ## Daily workflow
 
-* **Open desks**
+- **Open desks**
 
   ```bash
   cd ~/Desktop/_wt/desk-1    # typically on main-desk-1
   cd ~/Desktop/_wt/desk-2    # typically on main-desk-2
   ```
 
-* **Sync a desk with `main`**
+- **Sync a desk with `main`**
 
   ```bash
   gotomain
   git pull --ff-only     # or: git pull --rebase
   ```
 
-* **Start a feature from a desk**
+- **Start a feature from a desk**
 
   ```bash
   # 1) On a desk's main branch
@@ -260,7 +335,7 @@ sb --update-only
   nb piercemaloney/ai-1380
   ```
 
-* **Submit a branch via Git Spice**
+- **Submit a branch via Git Spice**
 
   ```bash
   # from the feature branch
@@ -269,7 +344,7 @@ sb --update-only
   # => PR body  = effectively empty
   ```
 
-* **Return to a desk's "main"**
+- **Return to a desk's "main"**
 
   ```bash
   gotomain
@@ -279,10 +354,10 @@ sb --update-only
 
 ## Why this works
 
-* **Concurrency:** two isolated working dirs let tools (VS Code, dev servers, etc.) run independently.
-* **Simplicity:** I rarely add/remove worktrees; I just switch branches within each desk.
-* **Safety:** Git enforces **branch exclusivity** across worktrees (a branch can be checked out in only one worktree).
-* **PR ergonomics:** `nb` + `sb` give a predictable “one commit per new branch, clean PR title/body” flow on top of Git Spice’s stacking model.
+- **Concurrency:** two isolated working dirs let tools (VS Code, dev servers, etc.) run independently.
+- **Simplicity:** I rarely add/remove worktrees; I just switch branches within each desk.
+- **Safety:** Git enforces **branch exclusivity** across worktrees (a branch can be checked out in only one worktree).
+- **PR ergonomics:** `nb` + `sb` give a predictable “one commit per new branch, clean PR title/body” flow on top of Git Spice’s stacking model.
 
 ---
 
@@ -298,9 +373,9 @@ git fetch --all --prune   # keep refs and remotes tidy
 
 ## Gotchas
 
-* If Git says a branch is "already checked out," it's active in another desk—switch that desk away first.
-* Avoid nesting worktrees inside the main repo; keep them as siblings in `~/Desktop/_wt`.
-* `sb` always uses the **latest commit subject** on the current branch. If you want a different PR title, amend the commit or pass `--title` manually.
+- If Git says a branch is "already checked out," it's active in another desk—switch that desk away first.
+- Avoid nesting worktrees inside the main repo; keep them as siblings in `~/Desktop/_wt`.
+- `sb` always uses the **latest commit subject** on the current branch. If you want a different PR title, amend the commit or pass `--title` manually.
 
 ```
 ::contentReference[oaicite:0]{index=0}
