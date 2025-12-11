@@ -138,3 +138,75 @@ sb() {
     --body " " \
     "$@"
 }
+
+
+# dabgone
+# - deletes all branches whose upstream is gone
+# - protects main worktree branches
+# - shows list and asks confirmation
+dabgone() {
+  # Branches you *never* want auto-deleted
+  local protected=("main" "main-desk-1" "main-desk-2")
+
+  # Make sure we're in a git repo
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+    echo "Not inside a git repository."
+    return 1
+  }
+
+  echo "Fetching and pruning remotes..."
+  git fetch --prune || {
+    echo "git fetch failed; aborting."
+    return 1
+  }
+
+  # Find local branches whose upstream is marked ': gone]'
+  local gone_branches
+  gone_branches=($(git branch -vv | awk '/: gone]/{print $1}'))
+
+  if (( ${#gone_branches[@]} == 0 )); then
+    echo "No local branches with gone upstreams found. Nothing to do ✅"
+    return 0
+  fi
+
+  # Filter out protected branches
+  local deletable=()
+  local b p skip
+  for b in "${gone_branches[@]}"; do
+    skip=0
+    for p in "${protected[@]}"; do
+      if [[ "$b" == "$p" ]]; then
+        skip=1
+        break
+      fi
+    done
+    (( skip )) || deletable+=("$b")
+  done
+
+  if (( ${#deletable[@]} == 0 )); then
+    echo "Only protected branches have gone upstreams. Nothing to delete ✅"
+    return 0
+  fi
+
+  echo "The following branches have upstreams marked as ': gone]' and will be deleted:"
+  for b in "${deletable[@]}"; do
+    echo "  $b"
+  done
+  echo
+
+  # Interactive confirmation (y/N)
+  read -q "REPLY?Delete these branches? [y/N] " || {
+    echo
+    echo "Aborted. No branches were deleted."
+    return 1
+  }
+  echo
+
+  # Delete them
+  for b in "${deletable[@]}"; do
+    echo "Deleting $b"
+    git branch -D "$b"
+  done
+
+  echo "Done ✅"
+}
